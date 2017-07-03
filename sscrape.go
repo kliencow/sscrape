@@ -45,6 +45,8 @@ func (ts *TargetServer) FormLogin(loginPath string, form url.Values) error {
 	}
 
 	client := &http.Client{
+		// ignore redirects. It's common to 302 after a succesful login and then the session
+		// cookie can be lost.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -102,15 +104,21 @@ func (ts TargetServer) URL(path string) (string, error) {
 	return u.String(), nil
 }
 
-// Reqest build a request and adds common thing that I always end up adding. More importantly
+// Request builds a request and adds common thing that I always end up adding. More importantly
 // this loads the cookies into the request
 func (ts TargetServer) Request(method string, path string, form url.Values) (*http.Request, error) {
 	url, err := ts.URL(path)
 	if err != nil {
 		return nil, err
 	}
+	req := &http.Request{}
 
-	req, err := http.NewRequest(method, url, bytes.NewBufferString(form.Encode()))
+	if method == "POST" || method == "PUT" {
+		req, err = http.NewRequest(method, url, bytes.NewBufferString(form.Encode()))
+	} else if method == "GET" || method == "HEAD" {
+		req, err = http.NewRequest(method, url, bytes.NewBufferString(""))
+		req.URL.RawQuery = form.Encode()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid request, unable to construct: %v", err)
 	}
@@ -125,7 +133,7 @@ func (ts TargetServer) Request(method string, path string, form url.Values) (*ht
 		req.Header.Set("User-Agent", ts.AgentName)
 	}
 
-	if method != "GET" || method != "HEAD" {
+	if method == "POST" || method == "PUT" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 
