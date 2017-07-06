@@ -32,6 +32,19 @@ type TargetServer struct {
 	// Providing this cookie name will make Form based logins easier as it will error if the
 	// appropriate cookie is not found. Otherwise, it's not used.
 	SessionCookieName string
+
+	// ConnectionsPerLogin is a dumb bruteforce way of keeping a session fresh.
+	// 0 means no limit, eg only log in one time
+	ConnectionsPerLogin int
+
+	// The number of connections called by a GetPage or equivalent
+	numConnections int
+
+	// loginForm hols onto the login form for future use
+	loginForm url.Values
+
+	// loginPath is the path to be used for logging in for future use
+	loginPath string
 }
 
 // FormLogin tries to log into the site using the login parameters provided in the form parameter.
@@ -63,13 +76,48 @@ func (ts *TargetServer) FormLogin(loginPath string, form url.Values) error {
 		return fmt.Errorf("session cookie not found after login due to possible bad username and password")
 	}
 
+	ts.loginForm = form
+	ts.loginPath = loginPath
+	return nil
+}
+
+// Relogin tries to log into the server again using the previous credentials at the
+// previous path.
+func (ts *TargetServer) Relogin() error {
+	if err := ts.FormLogin(ts.loginPath, ts.loginForm); err != nil {
+		fmt.Errorf("relogin failed, %v", err)
+	}
+
+	fmt.Println("Relogged in got cookies: %v", ts.Jar)
 	return nil
 }
 
 
+// conditionalLogin is a task to automatically log someone back in after a fixed number
+// of sessions. In the future, I'd like to make this a bit smarter so that it can look at
+// responses to find out if the session was logged out. Since this is supposed to be
+// super simple at this point, i've left it out.
+//
+// Uses TargertServer.ConnectionsPerLogin to store the number of sessions to wait before
+// logging in again. ConnectionsPerLogin of 0 will never relogin.
+func (ts *TargetServer) conditionalLogin() error {
+	ts.numConnections++
+
+	if ts.ConnectionsPerLogin > 0 && ts.numConnections > 0 {
+		if ts.numConnections % ts.ConnectionsPerLogin == 0 {
+			if err := ts.Relogin(); err != nil {
+				return fmt.Errorf("Conditional Login failed at %d connections with limit of %d and got error, %v", ts.numConnections, ts.ConnectionsPerLogin, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // GetPage gets a page from the server and returns the result as a string. At the moment
 // there is no support for binary results.
 func (ts *TargetServer) GetPage(path string, query url.Values) (string, error) {
+	defer ts.conditionalLogin()
 	req, err := ts.Request("GET", path, query)
 	if err != nil {
 		return "", fmt.Errorf("unable to create log in request, %v", err)
