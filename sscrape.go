@@ -24,7 +24,7 @@ type TargetServer struct {
 	// with it. But why?
 	AgentName string
 
-	// Host (required) is the fully qualified URL of the server to be scraped
+	// Host (required) is the fully qualified url of the server to be scraped
 	// For example: http://example.com:8080 or http://google.com
 	Host string
 
@@ -88,7 +88,6 @@ func (ts *TargetServer) Relogin() error {
 		fmt.Errorf("relogin failed, %v", err)
 	}
 
-	fmt.Println("Relogged in got cookies: %v", ts.Jar)
 	return nil
 }
 
@@ -140,10 +139,10 @@ func (ts *TargetServer) GetPage(path string, query url.Values) (string, error) {
 }
 
 
-// URL is a helper function that just builds the right urls for me because using net/url
-// is tedious.
-func (ts TargetServer) URL(path string) (string, error) {
-	u, err := url.ParseRequestURI(ts.Host)
+// URL is the public version of url and builds the url from a host and a path for you and
+// validates that you infact have a good url.
+func URL(host string, path string) (string, error) {
+	u, err := url.ParseRequestURI(host)
 	if err != nil {
 		return "", fmt.Errorf("url for host unable to be parsed: %v", err)
 	}
@@ -152,10 +151,16 @@ func (ts TargetServer) URL(path string) (string, error) {
 	return u.String(), nil
 }
 
+// url is a helper function that just builds the right urls for me because using net/url
+// is tedious.
+func (ts TargetServer) url(path string) (string, error) {
+	return URL(ts.Host, path)
+}
+
 // Request builds a request and adds common thing that I always end up adding. More importantly
 // this loads the cookies into the request
 func (ts TargetServer) Request(method string, path string, form url.Values) (*http.Request, error) {
-	url, err := ts.URL(path)
+	url, err := ts.url(path)
 	if err != nil {
 		return nil, err
 	}

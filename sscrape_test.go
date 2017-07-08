@@ -11,7 +11,7 @@ func TestURL(t *testing.T) {
 		Host: "http://example.com",
 	}
 
-	u, err := ts.URL("path/to/file.txt")
+	u, err := ts.url("path/to/file.txt")
 	if err != nil {
 		t.Errorf("unexpected error building url: %v", err)
 	}
